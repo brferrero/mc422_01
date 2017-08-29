@@ -1,69 +1,112 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <wordexp.h>  /*Para fazer o parse dos argumentos*/
+#include "ep1sh.h"
 
-int type_prompt (void)
-{   
-    char cwd[1024];
-    getcwd(cwd, sizeof(cwd));
-    printf("[%s]$ ", cwd);
-    return 0;
-}
-
-char** read_command (int *nargs) {
-    char **args;
-    char command[100];
-    char *token;
-    int i = 0;
-
-    fgets(command, 1000, stdin);
-    token = strtok(command, " ");
-    
-    args = malloc(sizeof(char*) * 10);  
-    while( token != NULL ) {
-        args[i] = malloc(sizeof(char)*strlen(token)+1);
-        strcpy(args[i],token);
-        token = strtok(NULL, " ");
-        i++;
-    }
-
-    *nargs = i;
-    return args;
-}
-
-void forkar()
+int main (int argc, char **argv)
 {
-    pid_t childpid;
-    if ( (childpid = fork()) != 0) {
-        /* Processo PAI */
-        childpid = waitpid (-1, NULL, 0); /* Espera processo filho terminar */
-        /* printf ("childpid : %d \n",childpid);
-        // sleep(3); */
-    }
-    else {
-        /* Processo FILHO*/  
-
-        /*printf ("exec comando: %s \n",argv[1]);*/
-        sleep(3);
-    }
-}
-
-int main (int argc, char **argv) {
     char **args;
     int nargs;
     int i = 0;
   
     while (1) {
-        type_prompt();
-        args = read_command(&nargs);
-
-        for (i = 0; i < nargs; i++)
-            printf("\nArgumento %d: %s", i, args[i]);
         
+        args = read_command(&nargs);
+        execute_command(args);
+
+        /*for (i = 0; i < nargs; i++)
+            printf("\nArgumento %d: %s", i, args[i]);
+        */
     }
     exit(0);
+}
+
+char* type_prompt (void)
+{   
+    char prompt[MAX_STRING], cwd[MAX_STRING];
+    char *command;
+
+    getcwd(cwd, sizeof(cwd));
+    sprintf(prompt,"[%s]$ ", cwd);
+
+    command = readline(prompt);
+    if (command)
+         add_history(command);
+
+    return command;
+}
+
+char** read_command (int *nargs)
+{
+    char **args, *command, *token;
+    int i = 0;
+
+    command = type_prompt();    
+
+    /* Parser de argumentos da linha de comando */
+    args = malloc(sizeof(char*) * 10);  
+    token = strtok(command, " ");
+    while( token != NULL ) {
+        args[i] = malloc(sizeof(char)*MAX_STRING);
+        strcpy(args[i],token);
+        token = strtok(NULL, " ");
+        i++;
+    }
+
+    /* Numero de argumentos digitados */
+    *nargs = i;
+    return args;
+}
+
+int execute_command(char** args)
+{
+    char *envp[] = { NULL };
+    pid_t childpid;
+
+    if(strcmp("chown", args[0]) == 0)
+        execute_chown(args[2], args[1]+1);
+    else if(strcmp("date", args[0]) == 0)
+        execute_date();
+    else {
+        if ( (childpid = fork()) != 0) {
+            /* Processo PAI */
+            childpid = waitpid (-1, NULL, 0); /* Espera processo filho terminar */
+        }
+        else {
+            /* Processo FILHO*/  
+            execve(args[0], args, envp);
+        }
+    }
+
+    
+    return 0;
+}
+
+int execute_chown(char* path, char* group)
+{
+    struct group *g;
+    struct stat file;
+    gid_t gid;
+    uid_t uid;
+
+    g = getgrnam(group);
+    stat(path, &file);
+
+    gid = g->gr_gid;
+    uid = file.st_uid;
+
+    chown(path, uid, gid);
+    return 0;
+}
+
+int execute_date()
+{
+    time_t rawtime;
+    struct tm * timeinfo;
+    char buffer [80];
+  
+    time (&rawtime);
+    timeinfo = localtime(&rawtime);
+  
+    strftime (buffer,80,"%a %b %d %H:%M:%S %Z %Y",timeinfo);
+    printf ("%s\n", buffer);
+
+    return 0;
 }
