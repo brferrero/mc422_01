@@ -14,17 +14,16 @@ int type_prompt (void)
     return 0;
 }
 
-int read_command (char **args, int *nargs) {
+char** read_command (int *nargs) {
+    char **args;
     char command[100];
     char *token;
-    int i = 1;
+    int i = 0;
 
-    fgets(command, 100, stdin);
+    fgets(command, 1000, stdin);
     token = strtok(command, " ");
     
     args = malloc(sizeof(char*) * 10);  
-    args[0] = malloc(sizeof(char)*20);
-    sscanf(command, "%s%*[^\n]",args[0]);  
     while( token != NULL ) {
         args[i] = malloc(sizeof(char)*strlen(token)+1);
         strcpy(args[i],token);
@@ -33,7 +32,7 @@ int read_command (char **args, int *nargs) {
     }
 
     *nargs = i;
-    return 0;
+    return args;
 }
 
 void forkar()
@@ -56,25 +55,12 @@ void forkar()
 int main (int argc, char **argv) {
     char **args;
     int nargs;
-    char command[100];
-    char *token;
     int i = 0;
   
     while (1) {
         type_prompt();
-        fgets(command, 100, stdin);
-        token = strtok(command, " ");
-        
-        args = malloc(sizeof(char*) * 10);  
-        while( token != NULL ) {
-            args[i] = malloc(sizeof(char)*strlen(token)+1);
-            strcpy(args[i],token);
-            token = strtok(NULL, " ");
-            i++;
-        }
+        args = read_command(&nargs);
 
-        nargs = i;
-      
         for (i = 0; i < nargs; i++)
             printf("\nArgumento %d: %s", i, args[i]);
         
