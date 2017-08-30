@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <time.h>
 
 pthread_mutex_t count_mutex     = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  condition_var   = PTHREAD_COND_INITIALIZER;
@@ -12,9 +13,12 @@ int  count = 0;
 #define COUNT_HALT1  3
 #define COUNT_HALT2  6
 
-main()
+int intensiveLoop (void);
+int read_process();
+
+int main()
 {
-   pthread_t thread1, thread2;
+   /*pthread_t thread1, thread2;
 
    pthread_create( &thread1, NULL, &functionCount1, NULL);
    pthread_create( &thread2, NULL, &functionCount2, NULL);
@@ -24,7 +28,9 @@ main()
 
    printf("Final count: %d\n",count);
 
-   exit(EXIT_SUCCESS);
+   exit(EXIT_SUCCESS); */
+   intensiveLoop();
+   return 0;
 }
 
 // Write numbers 1-3 and 8-10 as permitted by functionCount2()
@@ -74,4 +80,25 @@ void *functionCount2()
        if(count >= COUNT_DONE) return(NULL);
     }
 
+}
+
+/* Loop para gastar tempo de CPU */
+int intensiveLoop (void)
+{
+  printf("start\n");
+
+  volatile unsigned long long i;
+  for (i = 0; i < 10000000000000ULL; ++i);
+
+  printf("stop\n");
+
+  return 0;
+}
+
+int read_process()
+{
+    FILE *fp;
+    fp = fopen("trace.txt", "r");
+
+    
 }
