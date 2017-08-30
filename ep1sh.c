@@ -4,7 +4,7 @@ int main (int argc, char **argv)
 {
     char **args;
     int nargs;
-    int i = 0;
+    /*int i = 0;*/
   
     while (1) {
         

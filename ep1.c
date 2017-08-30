@@ -3,6 +3,8 @@
 #include <pthread.h>
 #include <time.h>
 
+int NUM_THREADS;
+
 pthread_mutex_t count_mutex     = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  condition_var   = PTHREAD_COND_INITIALIZER;
 
