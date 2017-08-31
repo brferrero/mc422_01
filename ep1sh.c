@@ -4,7 +4,7 @@ int main (int argc, char **argv)
 {
     char **args;
     int nargs;
-    /*int i = 0;*/
+    int i = 0;
   
     while (1) {
         
@@ -12,9 +12,8 @@ int main (int argc, char **argv)
         if (execute_command(args) == -1) 
             break;
 
-        /*for (i = 0; i < nargs; i++)
-            printf("\nArgumento %d: %s", i, args[i]);
-        */
+        for (i = 0; i < nargs; i++)
+            free(args[i]);
     }
     exit(0);
 }

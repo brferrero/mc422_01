@@ -3,41 +3,74 @@
 #include <pthread.h>
 #include <time.h>
 
-int NUM_THREADS;
-
 pthread_mutex_t count_mutex     = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t  condition_var   = PTHREAD_COND_INITIALIZER;
 
-void *functionCount1();
-void *functionCount2();
-int  count = 0;
-#define COUNT_DONE  10
-#define COUNT_HALT1  3
-#define COUNT_HALT2  6
+#define MAX_STRING 1024
+#define NUM_THREADS 100
+#define EPSLON 0.0000000001
 
-int intensiveLoop (void);
-int read_process();
+typedef struct sExecucao {
+  double d0;
+  double dt;
+  double deadline;
+  char nome[MAX_STRING];
+} Execucao;
 
-int main()
+FILE* openfile(char* file);
+int read_process(FILE* fp, Execucao* exec);
+void *processo();
+
+int main(int argc, char* argv[])
 {
-   /*pthread_t thread1, thread2;
+/* pthread_join( thread1, NULL); */
+  pthread_t threads[NUM_THREADS];
+  pid_t childpid;
+  FILE* fp;
+  double clock = 0;
+  Execucao exec;
+  
+  /* ESCALONADOR */
+  fp = openfile(argv[2]);
+  read_process(fp, &exec);
+  printf("Escalonador: %s\n", argv[1]);
+  while(1) {
 
-   pthread_create( &thread1, NULL, &functionCount1, NULL);
-   pthread_create( &thread2, NULL, &functionCount2, NULL);
 
-   pthread_join( thread1, NULL);
-   pthread_join( thread2, NULL);
+    if ((exec.d0 - clock) < EPSLON ) {
+      printf("entrou!\n\n\n");
+      /* Adiciona exec na fila de processos */
+      /* DE ACORDO COM O ALGORITMO DO ESCALONADOR */
+      if (read_process(fp, &exec) == -1) /* pega o proximo da lista trace.txt */
+        break;
+    }
+    
+    /* se tiver processo na fila */
+    /* pegar primeiro da fila */
+    /* dispara processo */
+    /*pthread_create( &thread1, NULL, &processo, quantum);*/
 
-   printf("Final count: %d\n",count);
+    /* CASO ROUND ROBIN */
+    /*colocar na fila com dt-quantum*/
 
-   exit(EXIT_SUCCESS); */
-   intensiveLoop();
-   return 0;
+    /* CASO Prioridade */
+    /* usar uma MinPQ */
+
+
+    usleep(100000);
+    clock += 0.1;
+    printf("clock: %lf | processo: %s | d0: %lf\n", clock, exec.nome, exec.d0);
+      
+    
+  }
+
+  fclose(fp);
+  return 0;
 }
 
 // Write numbers 1-3 and 8-10 as permitted by functionCount2()
 
-void *functionCount1()
+/*void *functionCount1()
 {
    for(;;)
    {
@@ -54,53 +87,25 @@ void *functionCount1()
 
       if(count >= COUNT_DONE) return(NULL);
     }
-}
+}*/
 
 // Write numbers 4-7
 
-void *functionCount2()
+void* processo(int sleep)
 {
-    for(;;)
-    {
-       pthread_mutex_lock( &count_mutex );
-
-       if( count < COUNT_HALT1 || count > COUNT_HALT2 )
-       {
-          // Condition of if statement has been met. 
-          // Signal to free waiting thread by freeing the mutex.
-          // Note: functionCount1() is now permitted to modify "count".
-          pthread_cond_signal( &condition_var );
-       }
-       else
-       {
-          count++;
-          printf("Counter value functionCount2: %d\n",count);
-       }
-
-       pthread_mutex_unlock( &count_mutex );
-
-       if(count >= COUNT_DONE) return(NULL);
-    }
-
+    usleep(sleep);
 }
 
-/* Loop para gastar tempo de CPU */
-int intensiveLoop (void)
+FILE* openfile(char* file)
 {
-  printf("start\n");
+  FILE *fp;
+  fp = fopen(file, "r");
+  return fp;
+}
 
-  volatile unsigned long long i;
-  for (i = 0; i < 10000000000000ULL; ++i);
-
-  printf("stop\n");
-
+int read_process(FILE* fp, Execucao* exec)
+{ 
+  if (fscanf(fp, "%lf %lf %lf %s", &exec->d0, &exec->dt, &exec->deadline, exec->nome) == EOF)
+    return -1;
   return 0;
-}
-
-int read_process()
-{
-    FILE *fp;
-    fp = fopen("trace.txt", "r");
-
-    
 }
