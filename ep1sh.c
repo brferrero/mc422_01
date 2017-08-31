@@ -9,7 +9,8 @@ int main (int argc, char **argv)
     while (1) {
         
         args = read_command(&nargs);
-        execute_command(args);
+        if (execute_command(args) == -1) 
+            break;
 
         /*for (i = 0; i < nargs; i++)
             printf("\nArgumento %d: %s", i, args[i]);
@@ -60,23 +61,30 @@ int execute_command(char** args)
     char *envp[] = { NULL };
     pid_t childpid;
 
-    if(strcmp("chown", args[0]) == 0)
-        execute_chown(args[2], args[1]+1);
-    else if(strcmp("date", args[0]) == 0)
-        execute_date();
-    else {
-        if ( (childpid = fork()) != 0) {
-            /* Processo PAI */
-            childpid = waitpid (-1, NULL, 0); /* Espera processo filho terminar */
-        }
-        else {
-            /* Processo FILHO*/  
-            execve(args[0], args, envp);
-        }
+    /* sai do shell */
+    if (strcmp("exit", args[0]) == 0) {
+        printf ("Saindo do o shell...\n");
+        return -1;
     }
-
-    
-    return 0;
+    else {
+        if (strcmp("chown", args[0]) == 0)
+            execute_chown(args[2], args[1]+1);
+        else 
+            if (strcmp("date", args[0]) == 0)
+                execute_date();
+            else {
+                if ((childpid = fork()) != 0) {
+                    /* Processo PAI */
+                    childpid = waitpid (-1, NULL, 0); /* Espera processo filho terminar */
+                }
+                else {
+                    /* Processo FILHO*/  
+                    if (execve(args[0], args, envp) == -1 )
+                        printf ("%s : nao encontrado\n", args[0]);
+                }
+            }
+        return 0;
+    }
 }
 
 int execute_chown(char* path, char* group)
