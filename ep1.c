@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <time.h>
+#include <unistd.h>
 
 pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
 pthread_t thread1;
@@ -11,187 +11,217 @@ int cpu; /* CPU sendo usada = 1 */
 #define EPSLON 0.0000000001
 
 typedef struct sExecucao {
-  double d0;
-  double dt;
-  double deadline;
-  char nome[MAX_STRING];
+    double d0;
+    double dt;
+    double deadline;
+    char nome[MAX_STRING];
+    int rank;
 } Execucao;
 
 typedef struct cel {
-  Execucao exec;
-  struct cel *prox;
+    Execucao exec;
+    struct cel* prox;
 
 } Celula;
 
 typedef Celula* Fila;
+typedef Celula* Lista;
 
-FILE* openfile(char* file);
-int read_process(FILE* fp, Execucao* exec);
-void* processo(void* sleep);
-int add_process(int escalonador, Fila fila, Execucao exec);
-int check_process(int escalonador, Fila fila);
+/* Funcoes para manipular as listas */
+Lista LISTAinicia (void);
+Lista LISTAinsere (Lista p, Execucao x);
+void LISTAdump (Lista p);
 
-void insere (Execucao exec, Celula *p) {
-  Celula *nova;
-  nova = malloc (sizeof (Celula));
-  nova->exec = exec;
-  nova->prox = p->prox;
-  p->prox = nova;
-}
 
-void busca_e_insere (Execucao exec, double dt, Celula *le)
+FILE* open_file (char* file);
+int read_process (FILE* fp, Execucao* exec);
+void* processo (void* sleep);
+
+int add_process (int escalonador, Lista fila, Execucao exec);
+int check_process (int escalonador, Fila fila);
+
+/*---------------------------------------------------------------------------*/
+
+int main(int argc, char *argv[])
 {
- Celula *p, *q, *nova;
- nova = malloc (sizeof (Celula));
- nova->exec = exec;
- p = le;
- q = le->prox;
- while (q != NULL && q->exec.dt <= dt ) {
-    p = q;
-    q = q->prox;
- }
- nova->prox = q;
- p->prox = nova;
-}
+    FILE *fp;
+    /* "relogio" do escalonador */
+    double clock = 0;
+    Execucao exec;
+    Fila fila = NULL;
+    Lista lista;
+    lista = LISTAinicia ();
+    /* contador de processos */
+    int cont_processos = 0;
+    
+    /* seleciona o tipo do Escalonador */
+    int escalonador = atoi(argv[1]);
 
+    double *dt = malloc (sizeof(*dt));
+    *dt = 1000000.0;
 
-void remove_celula (Celula *p)
-{
- Celula *lixo;
- lixo = p->prox;
- p->prox = lixo->prox;
- free (lixo);
-}
+    /* abre e le a primeira linha do arquivo trace */
+    fp = open_file (argv[2]);
+    read_process (fp, &exec);
+    
+    printf ("Escalonador: %s\n", argv[1]);
+    /* ESCALONADOR */
+    while (1) {
 
-int main(int argc, char* argv[])
-{
-  
-  FILE* fp;
-  double clock = 0;
-  Execucao exec;
-  Fila fila;
-  int escalonador = atoi(argv[1]);
+        /* Adicionar o processo na fila */
+        if ((exec.d0 - clock) < EPSLON ) {
+            printf ("\n\nChegou o processo: %s \t em d0: %lf \t executar por %lf \n\n", exec.nome, exec.d0, exec.dt);
+            /* Adiciona exec na fila de processos */
+            lista = LISTAinsere (lista, exec);
+            add_process (escalonador, lista, exec);
+            cont_processos++;
+            /* pega o proximo da lista trace.txt */
+            if (read_process (fp, &exec) == -1)
+                break;
+        }
 
-  double* dt = malloc(sizeof(*dt));
-  *dt = 1000000.0;
-  
-  /* ESCALONADOR */
-  fp = openfile(argv[2]);
-  read_process(fp, &exec);
-  printf("Escalonador: %s\n", argv[1]);
-  while(1) {
-
-    /* Adicionar o processo na fila */
-    if ((exec.d0 - clock) < EPSLON ) {
-      printf("entrou!\n\n\n");
-      /* Adiciona exec na fila de processos */
-      add_process(escalonador, fila, exec);
-      if (read_process(fp, &exec) == -1) /* pega o proximo da lista trace.txt */
-        break;
+        check_process (escalonador, fila);
+        
+        /* 0.1 segundos */
+        usleep (100000);
+        clock += 0.1;
+        printf ("clock: %lf | processo: %s | d0: %lf\n", clock, exec.nome, exec.d0);
     }
-    
-    check_process(escalonador,fila);
-
-    usleep(100000);
-    clock += 0.1;
-    printf("clock: %lf | processo: %s | d0: %lf\n", clock, exec.nome, exec.d0);
-  }
-
-  fclose(fp);
-  return 0;
+    printf ("\n\n"); 
+    LISTAdump (lista);
+    fclose (fp);
+    free (dt);
+    return 0;
 }
 
-void* processo(void* slep)
+/*---------------------------------------------------------------------------*/
+
+void *processo(void *slep)
 {
+    double sleep = *((double*) slep);
+    pthread_mutex_lock ( &mutex1 );
+    cpu = 1;
+    pthread_mutex_unlock ( &mutex1 );
 
-  double sleep = *((double*) slep);
-  pthread_mutex_lock( &mutex1 );
-  cpu = 1;
-  pthread_mutex_unlock( &mutex1 );
+    sleep = (int)sleep*1000000;
+    usleep (sleep);
 
-  sleep = (int)sleep*1000000;
-  usleep(sleep);
-
-  pthread_mutex_lock( &mutex1 );
-  cpu = 0;
-  pthread_mutex_unlock( &mutex1 );
+    pthread_mutex_lock( &mutex1 );
+    cpu = 0;
+    pthread_mutex_unlock( &mutex1 );
+    return NULL;
 }
 
-FILE* openfile(char* file)
+FILE *open_file (char *file)
 {
-  FILE *fp;
-  fp = fopen(file, "r");
-  return fp;
+    FILE *fp;
+    fp = fopen (file, "r");
+    return fp;
 }
 
-int read_process(FILE* fp, Execucao* exec)
+int read_process (FILE *fp, Execucao *exec)
 { 
-  if (fscanf(fp, "%lf %lf %lf %s", &exec->d0, &exec->dt, &exec->deadline, exec->nome) == EOF)
-    return -1;
-  return 0;
+    if (fscanf (fp, "%lf %lf %lf %s", &exec->d0, &exec->dt, &exec->deadline, exec->nome) == EOF)
+        return -1;
+    return 0;
+}
+
+int add_process (int escalonador, Lista fila, Execucao exec)
+{
+    switch(escalonador) {
+        /* Shortest Job First */
+        case 1:
+            printf ("\nadd job to Shortest Job First\n");
+            /* busca e insere de acordo com o menor dt*/
+            break;
+            /* Round Robin */
+        case 2:
+            /* Colocar no fim apenas */
+            break;
+            /* Fila de prioridades */
+        case 3:
+
+            break;
+    }
+    return 0;
+}
+
+int check_process (int escalonador, Fila fila) 
+{
+    Execucao exec; /* tirar da fila */
+    double quantum = 0.1; /*100ms*/
+    switch(escalonador) {
+        /* Shortest Job First */
+        case 1:
+            if (cpu == 0)
+                /* remove da fila */
+                pthread_create( &thread1, NULL, &processo, &exec.dt);
+            break;
+
+            /* Round Robin */
+        case 2:
+            if (cpu == 0) {
+                /* remove da fila */
+                pthread_create(&thread1, NULL, &processo, &quantum);
+                /* coloca de volta na fila de processos com exec.dt -= quantum */
+                /* add_process(2, fila, exec_alterado) */
+            }
+            break;
+
+            /* Fila de prioridades */
+        case 3:
+            /* Mesmo caso do Round Robin mas a lista deve ser uma MinPQ */
+            /* remove da fila */
+            pthread_create(&thread1, NULL, &processo, &quantum);
+
+            /* coloca de volta na fila de processos com exec.dt -= quantum */
+            /* add_process(3, fila, exec_alterado) */
+            break;
+    }
+    return 0;
 }
 
 
-
-int add_process(int escalonador, Fila fila, Execucao exec)
-{
-  
-  switch(escalonador) {
-    /* Shortest Job First */
-    case 1:
-      /* busca e insere de acordo com o menor dt*/
-      break;
-    
-    /* Round Robin */
-    case 2:
-      /* Colocar no fim apenas */
-
-      break;
-    
-    /* Fila de prioridades */
-    case 3:
-
-      break;
-
-  }
-
-  return 0;
+/* inicia um ptr para celula (Lista) */
+Lista LISTAinicia (void) {
+    Lista l = NULL;
+    return l;
 }
 
-int check_process(int escalonador, Fila fila)
-{
-  Execucao exec; /* tirar da fila */
-  double quantum = 0.1; /*100ms*/
-  switch(escalonador) {
-    /* Shortest Job First */
-    case 1:
-      if (cpu == 0)
-        /* remove da fila */
-        pthread_create( &thread1, NULL, &processo, &exec.dt);
-      break;
-    
-    /* Round Robin */
-    case 2:
-      if (cpu == 0) {
-        /* remove da fila */
-        pthread_create(&thread1, NULL, &processo, &quantum);
+/* insere processo por ordem de dt */
+Lista LISTAinsere (Lista p, Execucao x) {
+    Lista nova, q, ant;
+    double dt = x.dt;
+    double dt0;
+    q = p;
+    ant = NULL;
+    nova = malloc (sizeof (Celula));
+    nova->exec = x;
+    nova->prox = NULL;
+    if (q == NULL) 
+        return nova;
+    else {
+        while (q != NULL) {
+            dt0 = q->exec.dt;
+            if (dt < dt0) 
+                break;
+            ant = q;
+            q = q->prox;
+        }
+        nova->prox = q;
+        if (ant == NULL) 
+            p = nova;
+        else 
+            ant->prox = nova;
+        return p;  
+    }
+}
 
-        /* coloca de volta na fila de processos com exec.dt -= quantum */
-        /* add_process(2, fila, exec_alterado) */
-      }
-      break;
-    
-    /* Fila de prioridades */
-    case 3:
-      /* Mesmo caso do Round Robin mas a lista deve ser uma MinPQ */
-      /* remove da fila */
-      pthread_create(&thread1, NULL, &processo, &quantum);
-
-      /* coloca de volta na fila de processos com exec.dt -= quantum */
-      /* add_process(3, fila, exec_alterado) */
-      break;
-
-  }
-
-  return 0;
+/* imprime lista de processos */
+void LISTAdump (Lista p) {
+     while (p != NULL) {
+           printf ("%s: dt = %lf\n", p->exec.nome, p->exec.dt);
+           p = p->prox;
+     }
+     printf ("\n");
 }
