@@ -210,6 +210,7 @@ int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* 
                 /*se nao terminou, volta pra lista*/
                 if (exec.dt > 0) {
                     *fila = LISTAinsereRobin (*fila, exec);       
+                    /*ta contando mudancas de contexto de um mesmo processo*/
                     *mudanca_contexto = *mudanca_contexto + 1;
                 }
                 if (debug)
