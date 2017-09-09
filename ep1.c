@@ -32,6 +32,7 @@ typedef Celula* Lista;
 /* Funcoes para manipular as listas */
 Lista LISTAinicia (void);
 Lista LISTAinsere (Lista p, Execucao x);
+Lista LISTAinsereRobin (Lista p, Execucao x);
 Execucao LISTAtopo (Lista *l);
 void LISTAremove (Lista *l, Execucao x);
 void LISTAdump (Lista p);
@@ -164,11 +165,13 @@ int add_process (int escalonador, Lista* fila, Execucao exec)
             /* busca e insere de acordo com o menor dt*/
             *fila = LISTAinsere (*fila, exec);
             break;
-            /* Round Robin */
+        /* Round Robin */
         case 2:
+            /*FIFO com quantum */
             /* Colocar no fim apenas */
+            *fila = LISTAinsereRobin (*fila, exec);
             break;
-            /* Fila de prioridades */
+        /* Fila de prioridades */
         case 3:
 
             break;
@@ -188,7 +191,7 @@ int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* 
                 /* remove da fila */
                 exec = LISTAtopo(fila);
                 /*DEBUG*/
-                /*printf("Imprime Lista\n");
+                /*fprintf(stderr,"Imprime Lista\n");
                 LISTAdump(*fila);
                 */
                 if (debug)
@@ -202,7 +205,16 @@ int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* 
         case 2:
             if (cpu == 0) {
                 /* remove da fila */
-                mudanca_contexto++;
+                exec = LISTAtopo(fila);
+                exec.dt = exec.dt - quantum;
+                /*se nao terminou, volta pra lista*/
+                if (exec.dt > 0) {
+                    *fila = LISTAinsereRobin (*fila, exec);       
+                    *mudanca_contexto = *mudanca_contexto + 1;
+                }
+                if (debug)
+                    fprintf (stderr,"%s\t chegou em: %.2f\t dt: %.2f\texecutou em: %.2f\t terminou em: %.2f\t esperou: %.2f\n",exec.nome,exec.t0,exec.dt,clock,(clock+exec.dt),(clock-exec.t0));
+                fprintf (fout,"%s\t%.2f\t%.2f\t%.2f\n",exec.nome, (clock+exec.dt), (clock+exec.dt - exec.t0), exec.dt);
                 pthread_create(&thread1, NULL, &processo, &quantum);
                 /* coloca de volta na fila de processos com exec.dt -= quantum */
                 /* add_process(2, fila, exec_alterado) */
@@ -254,6 +266,23 @@ Lista LISTAinsere (Lista p, Execucao x) {
             p = nova;
         else 
             ant->prox = nova;
+        return p;  
+    }
+}
+
+/* insere processo por ordem de chegada */
+Lista LISTAinsereRobin (Lista p, Execucao x) {
+    Lista nova, q;
+    q = p;
+    nova = malloc (sizeof (Celula));
+    nova->exec = x;
+    nova->prox = NULL;
+    if (q == NULL) 
+        return nova;
+    else {
+        while (q->prox != NULL)
+            q = q->prox;
+        q->prox = nova;
         return p;  
     }
 }
