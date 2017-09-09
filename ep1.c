@@ -13,7 +13,7 @@ int cpu = 0;
 #define EPSILON 0.0000000001
 
 typedef struct sExecucao {
-    double d0;
+    double t0;
     double dt;
     double deadline;
     char nome[MAX_STRING];
@@ -42,30 +42,47 @@ int read_process (FILE* fp, Execucao* exec);
 void* processo (void* sleep);
 
 int add_process (int escalonador, Lista* fila, Execucao exec);
-int check_process (int escalonador, Lista* fila);
+int check_process (int escalonador, Lista* fila, double clock, FILE* fout, int* mudanca_contexto, int debug);
 
 /*---------------------------------------------------------------------------*/
 
 int main(int argc, char *argv[])
 {
-    FILE *fp;
+    FILE *fp, *fout;
     /* "relogio" do escalonador */
     double clock = 0;
-    Execucao exec;
-    Lista lista;
-    lista = LISTAinicia ();
     /* contador de processos */
     int cont_processos = 0;
     int lendo_arquivo = 1;
+    int debug = 0;
+    /* tipo do Escalonador: 1) SJF; 2) RoundRobin; 3) Prioridade; */
+    int escalonador;
+    int mudanca_contexto = 0;
     
-    /* seleciona o tipo do Escalonador */
-    int escalonador = atoi(argv[1]);
+    Execucao exec;
+    Lista lista;
 
-    double *dt = malloc (sizeof(*dt));
-    *dt = 1000000.0;
+    /* argumentos */
+    if (argc  < 4) {
+        exit(1);
+    }
+    else {
+        /*seleciona o escalonador*/
+        escalonador = atoi(argv[1]);
+        /* E/S */
+        fp = fopen (argv[2],"r");
+        fout = fopen (argv[3], "w");
+        if (fout == NULL || fp == NULL) {
+            printf ("Erro E/S!\n");
+            exit(1);
+        }
+        if (argc == 5) debug=1;
+    }
 
-    /* abre e le a primeira linha do arquivo trace */
-    fp = open_file (argv[2]);
+    /*lista de processos*/
+    lista = LISTAinicia ();
+
+    /* le a primeira linha do arquivo trace */
     read_process (fp, &exec);
     
     printf ("Escalonador escolhido: %s\n", argv[1]);
@@ -73,18 +90,19 @@ int main(int argc, char *argv[])
     while (1) {
 
         /* Adicionar o processo na fila */
-        if ((exec.d0 - clock) < EPSILON && lendo_arquivo == 1) {
-            printf ("\nChegou o %s: \t em d0: %lf \t Executar por %lf \n", exec.nome, exec.d0, exec.dt);
+        if ((exec.t0 - clock) < EPSILON && lendo_arquivo == 1) {
+            /*DEBUG*/
+            /*fprintf (stderr, "\nChegou o %s:\t em t0: %.2f\t com dt: %.2f \n", exec.nome, exec.t0, exec.dt);*/
             add_process (escalonador, &lista, exec);
             cont_processos++;
-            /* pega o proximo da lista trace.txt */
+            /* le o proximo processo */
             if (read_process (fp, &exec) == -1) {
                 lendo_arquivo = 0;
             }
         }
         
         if (lista != NULL)
-            check_process (escalonador, &lista);
+            check_process (escalonador, &lista, clock, fout, &mudanca_contexto, debug);
         else 
             if (lendo_arquivo == 0 && cpu == 0) {
                 /*terminou a lista de processos e liberou a cpu*/
@@ -94,16 +112,14 @@ int main(int argc, char *argv[])
         /* 0.1 segundos */
         usleep (100000);
         clock += 0.1;
-        /*printf ("clock: %lf | processo: %s | d0: %lf\n", clock, exec.nome, exec.d0);*/
+        /*fprintf (stderr,"clock: %lf | processo: %s | t0: %.2f\n", clock, exec.nome, exec.t0);*/
     }
-    printf ("\n"); 
-
-    /* teste: remove processo exec 
-    LISTAremove(&lista,exec);
-    */
+    
+    fprintf (fout,"%d",mudanca_contexto);
+    /*se tudo deu certo a lista estará vazia nesse ponto*/
     LISTAdump (lista);
     fclose (fp);
-    free (dt);
+    fclose (fout);
     return 0;
 }
 
@@ -134,7 +150,7 @@ FILE *open_file (char *file)
 
 int read_process (FILE *fp, Execucao *exec)
 { 
-    if (fscanf (fp, "%lf %lf %lf %s", &exec->d0, &exec->dt, &exec->deadline, exec->nome) == EOF)
+    if (fscanf (fp, "%lf %lf %lf %s", &exec->t0, &exec->dt, &exec->deadline, exec->nome) == EOF)
         return -1;
     return 0;
 }
@@ -144,7 +160,7 @@ int add_process (int escalonador, Lista* fila, Execucao exec)
     switch (escalonador) {
         /* Shortest Job First */
         case 1:
-            printf ("Insere %s na lista\n",exec.nome);
+            /*printf ("Insere %s na lista\n",exec.nome);*/
             /* busca e insere de acordo com o menor dt*/
             *fila = LISTAinsere (*fila, exec);
             break;
@@ -160,7 +176,7 @@ int add_process (int escalonador, Lista* fila, Execucao exec)
     return 0;
 }
 
-int check_process (int escalonador, Lista* fila) 
+int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* mudanca_contexto, int debug) 
 {
     Execucao exec;
     double quantum = 0.1; /*100ms*/
@@ -169,11 +185,15 @@ int check_process (int escalonador, Lista* fila)
         /* Shortest Job First */
         case 1:
             if (cpu == 0) {
-                printf("Imprime fila\n");
-                LISTAdump(*fila);
                 /* remove da fila */
                 exec = LISTAtopo(fila);
-                printf("Executa %s: por %lf\n",exec.nome,exec.dt);
+                /*DEBUG*/
+                /*printf("Imprime Lista\n");
+                LISTAdump(*fila);
+                */
+                if (debug)
+                    fprintf (stderr,"%s\t chegou em: %.2f\t dt: %.2f\texecutou em: %.2f\t terminou em: %.2f\t esperou: %.2f\n",exec.nome,exec.t0,exec.dt,clock,(clock+exec.dt),(clock-exec.t0));
+                fprintf (fout,"%s\t%.2f\t%.2f\t%.2f\n",exec.nome, (clock+exec.dt), (clock+exec.dt - exec.t0), exec.dt);
                 pthread_create( &thread1, NULL, &processo, &exec.dt);
             }
             break;
@@ -182,6 +202,7 @@ int check_process (int escalonador, Lista* fila)
         case 2:
             if (cpu == 0) {
                 /* remove da fila */
+                mudanca_contexto++;
                 pthread_create(&thread1, NULL, &processo, &quantum);
                 /* coloca de volta na fila de processos com exec.dt -= quantum */
                 /* add_process(2, fila, exec_alterado) */
