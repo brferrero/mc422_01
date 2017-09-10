@@ -16,9 +16,13 @@ typedef struct sExecucao {
     double t0;
     double dt;
     double deadline;
+    double dt_restante;
     char nome[MAX_STRING];
     int rank;
 } Execucao;
+
+/*o nome do processo será usado como identificador unico do mesmo*/
+char processo_atual[MAX_STRING];
 
 typedef struct cel {
     Execucao exec;
@@ -85,6 +89,7 @@ int main(int argc, char *argv[])
 
     /* le a primeira linha do arquivo trace */
     read_process (fp, &exec);
+    strcpy (processo_atual, exec.nome);
     
     printf ("Escalonador escolhido: %s\n", argv[1]);
     /* ESCALONADOR */
@@ -94,6 +99,7 @@ int main(int argc, char *argv[])
         if ((exec.t0 - clock) < EPSILON && lendo_arquivo == 1) {
             /*DEBUG*/
             /*fprintf (stderr, "\nChegou o %s:\t em t0: %.2f\t com dt: %.2f \n", exec.nome, exec.t0, exec.dt);*/
+            exec.dt_restante = exec.dt;
             add_process (escalonador, &lista, exec);
             cont_processos++;
             /* le o proximo processo */
@@ -168,7 +174,8 @@ int add_process (int escalonador, Lista* fila, Execucao exec)
         /* Round Robin */
         case 2:
             /*FIFO com quantum */
-            /* Colocar no fim apenas */
+            /* adiciona processo no final da lista */
+            exec.dt_restante = exec.dt;
             *fila = LISTAinsereRobin (*fila, exec);
             break;
         /* Fila de prioridades */
@@ -182,7 +189,7 @@ int add_process (int escalonador, Lista* fila, Execucao exec)
 int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* mudanca_contexto, int debug) 
 {
     Execucao exec;
-    double quantum = 0.1; /*100ms*/
+    double quantum = 0.2; /*100ms*/
 
     switch (escalonador) {
         /* Shortest Job First */
@@ -200,29 +207,32 @@ int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* 
                 pthread_create( &thread1, NULL, &processo, &exec.dt);
             }
             break;
-
-            /* Round Robin */
+        
+        /* Round Robin */
         case 2:
             if (cpu == 0) {
                 /* remove da fila */
                 exec = LISTAtopo(fila);
-                exec.dt = exec.dt - quantum;
+                exec.dt_restante = exec.dt_restante - quantum;
                 /*se nao terminou, volta pra lista*/
-                if (exec.dt > 0) {
+                if (exec.dt_restante > 0) {
                     *fila = LISTAinsereRobin (*fila, exec);       
-                    /*ta contando mudancas de contexto de um mesmo processo*/
-                    *mudanca_contexto = *mudanca_contexto + 1;
+                    /* verifica se trocou de processo */
+                    if (strcmp (processo_atual,exec.nome) != 0 ) {
+                        *mudanca_contexto = *mudanca_contexto + 1;
+                        strcpy (processo_atual, exec.nome);
+                    }
+                }
+                else {
+                    fprintf (fout,"%s\t%.2f\t%.2f\t%.2f\n",exec.nome, (clock+exec.dt), (clock+exec.dt - exec.t0), exec.dt);
                 }
                 if (debug)
                     fprintf (stderr,"%s\t chegou em: %.2f\t dt: %.2f\texecutou em: %.2f\t terminou em: %.2f\t esperou: %.2f\n",exec.nome,exec.t0,exec.dt,clock,(clock+exec.dt),(clock-exec.t0));
-                fprintf (fout,"%s\t%.2f\t%.2f\t%.2f\n",exec.nome, (clock+exec.dt), (clock+exec.dt - exec.t0), exec.dt);
                 pthread_create(&thread1, NULL, &processo, &quantum);
-                /* coloca de volta na fila de processos com exec.dt -= quantum */
-                /* add_process(2, fila, exec_alterado) */
             }
             break;
 
-            /* Fila de prioridades */
+        /* Fila de prioridades */
         case 3:
             /* Mesmo caso do Round Robin mas a lista deve ser uma MinPQ */
             /* remove da fila */
