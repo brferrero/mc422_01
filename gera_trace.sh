@@ -17,9 +17,9 @@ echo ${d0} ${dt} ${df} processo${i} >trace_${FNAME}_n${NPROCESSOS}.txt
 for i in `seq 1 ${NPROCESSOS}`; do
     delta=$((1 + RANDOM % 10))
     d0=`echo ${d0} + 0.${delta} | bc` 
-    dt=$((0 + RANDOM % 6))
+    dt=$((0 + RANDOM % 4))
     delta=$((1 + RANDOM % 9))
-    df=`echo ${d0} + ${dt}.${delta} +${df} | bc` 
+    df=`echo ${d0} + ${dt}.${delta} +${dt} | bc` 
     
     echo ${d0} ${dt}.${delta} $df processo${i} >>trace_${FNAME}_n${NPROCESSOS}.txt
 done
