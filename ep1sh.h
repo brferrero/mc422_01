@@ -16,6 +16,6 @@
 
 int execute_command(char** args);
 char* type_prompt (void);
-char** read_command (int *nargs);
+char** read_command (int* nargs);
 int execute_chown(char* path, char* group);
 int execute_date();

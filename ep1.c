@@ -1,36 +1,37 @@
+/*
+ *
+ * Bruno Ferrero n.USP: 3690142  Curso: BCC
+ * Rodrigo Alves n.USP 6800149   Curso: BCC
+ *
+ * Data: Set/2017
+ *
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <string.h>
 
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
-pthread_t thread1;
-/* CPU sendo usada = 1 */
-int cpu = 0; 
-
 #define MAX_STRING 32
 #define EPSILON 0.0000000001
 
+/* Execucao/processo que vai pra lista processos */
 typedef struct sExecucao {
     double t0;
     double dt;
     double deadline;
     double dt_restante;
     char nome[MAX_STRING];
-    int rank;
 } Execucao;
 
-/*o nome do processo será usado como identificador unico do mesmo*/
-char processo_atual[MAX_STRING];
 
+/* celula da lista de Execucao/processo */
 typedef struct cel {
     Execucao exec;
     struct cel* prox;
-
 } Celula;
 
-typedef Celula* Fila;
 typedef Celula* Lista;
 
 /* Funcoes para manipular as listas */
@@ -41,13 +42,19 @@ Execucao LISTAtopo (Lista *l);
 void LISTAremove (Lista *l, Execucao x);
 void LISTAdump (Lista p);
 
-
-FILE* open_file (char* file);
+/**/
 int read_process (FILE* fp, Execucao* exec);
 void* processo (void* sleep);
+void add_process (int escalonador, Lista* fila, Execucao exec);
+void check_process (int escalonador, Lista* fila, double clock, FILE* fout, int* mudanca_contexto, int debug);
 
-int add_process (int escalonador, Lista* fila, Execucao exec);
-int check_process (int escalonador, Lista* fila, double clock, FILE* fout, int* mudanca_contexto, int debug);
+/*o nome do processo será usado como identificador unico do mesmo*/
+char processo_atual[MAX_STRING];
+
+pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
+pthread_t thread1;
+/* CPU sendo usada = 1 */
+int cpu = 0; 
 
 /*---------------------------------------------------------------------------*/
 
@@ -59,11 +66,14 @@ int main(int argc, char *argv[])
     /* contador de processos */
     int cont_processos = 0;
     int lendo_arquivo = 1;
+    
+    /*debug != 0 imprime na stderr */
     int debug = 0;
     /* tipo do Escalonador: 1) SJF; 2) RoundRobin; 3) Prioridade; */
     int escalonador;
     int mudanca_contexto = 0;
     
+    /*execucao e lista de execucao*/
     Execucao exec;
     Lista lista;
 
@@ -124,7 +134,7 @@ int main(int argc, char *argv[])
     
     fprintf (fout,"%d",mudanca_contexto);
     /*se tudo deu certo a lista estará vazia nesse ponto*/
-    LISTAdump (lista);
+    /*LISTAdump (lista);*/
     fclose (fp);
     fclose (fout);
     return 0;
@@ -148,13 +158,6 @@ void* processo (void* slep)
     return NULL;
 }
 
-FILE *open_file (char *file)
-{
-    FILE *fp;
-    fp = fopen (file, "r");
-    return fp;
-}
-
 int read_process (FILE *fp, Execucao *exec)
 { 
     if (fscanf (fp, "%lf %lf %lf %s", &exec->t0, &exec->dt, &exec->deadline, exec->nome) == EOF)
@@ -162,7 +165,8 @@ int read_process (FILE *fp, Execucao *exec)
     return 0;
 }
 
-int add_process (int escalonador, Lista* fila, Execucao exec)
+/* recebe um processo lido do trace e o coloca em uma Lista */
+void add_process (int escalonador, Lista* fila, Execucao exec)
 {
     switch (escalonador) {
         /* Shortest Job First */
@@ -178,7 +182,7 @@ int add_process (int escalonador, Lista* fila, Execucao exec)
             exec.dt_restante = exec.dt;
             *fila = LISTAinsereFinal (*fila, exec);
             break;
-        /* Fila de prioridades */
+        /* Escalonamento com prioridade */
         case 3:
         /*Insere no final: as prioridades serao dadas de acordo com o dt*/
         /*quanto maior o dt, maior a prioridade -> mais quantum */
@@ -186,10 +190,9 @@ int add_process (int escalonador, Lista* fila, Execucao exec)
             *fila = LISTAinsereFinal (*fila, exec);
             break;
     }
-    return 0;
 }
 
-int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* mudanca_contexto, int debug) 
+void check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* mudanca_contexto, int debug) 
 {
     Execucao exec;
     double quantum = 0.2; /*200ms*/
@@ -236,7 +239,7 @@ int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* 
             }
             break;
 
-        /* Fila de prioridades */
+        /* Escalonamento com prioridade */
         case 3:
             /* Mesmo caso do Round Robin mas os processo com maiores dt receberao mais quantum */
             /* remove da fila */
@@ -271,9 +274,10 @@ int check_process (int escalonador, Lista* fila, double clock, FILE *fout, int* 
             pthread_create(&thread1, NULL, &processo, &quantum_prioridade);
             break;
     }
-    return 0;
 }
 
+/*---------------------------------------------------------------------------*/
+/* LISTA: funcoes */
 
 /* inicia um ptr para celula (Lista) */
 Lista LISTAinicia (void) {
@@ -327,6 +331,20 @@ Lista LISTAinsereFinal (Lista p, Execucao x) {
     }
 }
 
+/* devolve a Execucao do topo da lista e a remove da lista */
+Execucao LISTAtopo (Lista *l)
+{
+    Execucao topo;
+    Lista atual;
+    atual = *l;
+    topo = atual->exec;
+    *l = atual->prox;
+    free (atual);
+    return topo;
+}
+
+/* as funcoes abaixo so foram usadas para testar o codigo */
+
 /* remove execucao da lista */
 void LISTAremove (Lista *l, Execucao x)
 {
@@ -350,19 +368,6 @@ void LISTAremove (Lista *l, Execucao x)
         free(atual);
     }
 }
-
-/* devolve a Execucao do topo da lista e a remove da lista */
-Execucao LISTAtopo (Lista *l)
-{
-    Execucao topo;
-    Lista atual;
-    atual = *l;
-    topo = atual->exec;
-    *l = atual->prox;
-    free (atual);
-    return topo;
-}
-
 
 /* imprime lista de processos */
 void LISTAdump (Lista p) {

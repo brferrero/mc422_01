@@ -1,3 +1,12 @@
+/*
+ *
+ * Bruno Ferrero n.USP: 3690142  Curso: BCC
+ * Rodrigo Alves n.USP 6800149   Curso: BCC
+ *
+ * Data: Set/2017
+ *
+ */
+
 #include "ep1sh.h"
 
 int main (int argc, char **argv)
@@ -7,13 +16,14 @@ int main (int argc, char **argv)
     int i = 0;
   
     while (1) {
-        
         args = read_command(&nargs);
-        if (execute_command(args) == -1) 
-            break;
-
-        for (i = 0; i < nargs; i++)
-            free(args[i]);
+        
+        if (nargs != 0) {
+            if (execute_command(args) == -1) 
+                exit(0);
+            for (i = 0; i < nargs; i++)
+                free (args[i]);
+        }
     }
     exit(0);
 }
@@ -23,8 +33,8 @@ char* type_prompt (void)
     char prompt[MAX_STRING], cwd[MAX_STRING];
     char *command;
 
-    getcwd(cwd, sizeof(cwd));
-    sprintf(prompt,"[%s]$ ", cwd);
+    getcwd (cwd, sizeof(cwd));
+    sprintf (prompt,"[%s]$ ", cwd);
 
     command = readline(prompt);
     if (command)
@@ -33,6 +43,7 @@ char* type_prompt (void)
     return command;
 }
 
+/* devolve o comando e o numero de argumentos */
 char** read_command (int *nargs)
 {
     char **args, *command, *token;
@@ -52,9 +63,14 @@ char** read_command (int *nargs)
 
     /* Numero de argumentos digitados */
     *nargs = i;
+
+    /*marca final dos args*/
+    if (i != 0)
+        args[i] = 0;
     return args;
 }
 
+/* recebe um comando */
 int execute_command(char** args)
 {
     char *envp[] = { NULL };
@@ -114,6 +130,6 @@ int execute_date()
   
     strftime (buffer,80,"%a %b %d %H:%M:%S %Z %Y",timeinfo);
     printf ("%s\n", buffer);
-
+    
     return 0;
 }
